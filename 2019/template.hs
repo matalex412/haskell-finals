@@ -139,11 +139,18 @@ flatten f = flatten' f
 -- avoid unnecessary helpers
 propUnits :: CNFRep -> (CNFRep, [Int])
 propUnits xss 
-  | null us   = (xss, [])
+  | u == 0    = (xss, [])
   | otherwise = (xss'', u : xs)
   where
-    us          = (concat . filter (\x -> length x == 1)) xss
-    (u : _)     = us
+    findUnit :: CNFRep -> Int
+    findUnit ([x] : xss) 
+      = x
+    findUnit (_ : xss)
+      = findUnit xss
+    findUnit []
+      = 0
+
+    u           = findUnit xss
     xss'        = (map (delete (negate u)) . filter (u `notElem`)) xss
     (xss'', xs) = propUnits xss'
 
@@ -202,3 +209,4 @@ allSat f
       where
         vs' = is \\ map abs xs
         (v : _) = vs'
+        
