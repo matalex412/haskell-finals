@@ -137,6 +137,7 @@ flatten f = flatten' f
 --       | otherwise          = propUnits' yss x (ys : xss, xs)
 
 -- avoid unnecessary helpers
+-- shorter code not necessarily more idiomatic
 propUnits :: CNFRep -> (CNFRep, [Int])
 propUnits xss 
   | u == 0    = (xss, [])
