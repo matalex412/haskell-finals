@@ -1,0 +1,14 @@
+variables shown by index i - x_i
+left - false
+each variable corresponds to one layer
+multiple possible BDDs (n!)?
+each internal node shows a variable
+two leaves - true and falseinternal nodes can be shared
+
+dag -directed acylcic graph
+
+0, 1 nodeids show false and true
+
+arbitrary nodeids but unique
+order in list for bdd irrelevant
+
