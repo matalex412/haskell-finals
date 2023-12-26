@@ -1,9 +1,5 @@
--- If you want something else to practice on, try writing the original eval function, which has type
--- eval :: BExp -> Env -> Bool and rewrite the two make functions in terms of eval.
-
-
-
 import Data.List
+import Data.Maybe (fromJust)
 
 type Index = Int
 
@@ -19,48 +15,104 @@ type BDDNode =  (NodeId, (Index, NodeId, NodeId))
 type BDD = (NodeId, [BDDNode])
 
 ------------------------------------------------------
--- PART I
+-- PART I 40 mins
 
 -- Pre: The item is in the given table
 lookUp :: Eq a => a -> [(a, b)] -> b
-lookUp 
-  = undefined
+lookUp x
+  = fromJust . lookup x
 
 checkSat :: BDD -> Env -> Bool
-checkSat 
-  = undefined
+checkSat (r, ns) env
+  = checkSat' r
+  where
+    checkSat' :: NodeId -> Bool
+    checkSat' 0 
+      = False
+    checkSat' 1 
+      = True
+    checkSat' id
+      = checkSat'
+        $ if lookUp i env
+            then r
+            else l
+      where
+        (i, l, r) = lookUp id ns
 
 sat :: BDD -> [[(Index, Bool)]]
-sat 
-  = undefined
+sat (r, ns)
+  = sat' r
+  where
+    sat' :: NodeId -> [[(Index, Bool)]]
+    sat' 0 
+      = []
+    sat' 1 
+      = [[]]
+    sat' id
+      = map ((i, True) :) (sat' r) ++
+        map ((i, False) :) (sat' l)
+      where
+        (i, l, r) = lookUp id ns
+
+  -- = filter (checkSat bdd) [ (i, b) | i <- is, b <- [True, False] ]
+  -- where
+  --   is = [1, 2] :: [Index]
 
 ------------------------------------------------------
--- PART II
+-- PART II - 20 mins
 
 simplify :: BExp -> BExp
-simplify 
-  = undefined
+simplify (Not (Prim b))
+  = Prim (not b)
+simplify (Or (Prim b) (Prim b'))
+  = Prim (b || b')
+simplify (And (Prim b) (Prim b'))
+  = Prim (b && b')
+simplify e
+  = e
 
 restrict :: BExp -> Index -> Bool -> BExp
-restrict 
-  = undefined
+restrict (IdRef i') i b | i' == i
+  = Prim b
+restrict (Not exp') i b
+  = simplify (Not (restrict exp' i b))
+restrict (And exp' exp'') i b
+  = simplify (And (restrict exp' i b) (restrict exp'' i b))
+restrict (Or exp' exp'') i b
+  = simplify (Or (restrict exp' i b) (restrict exp'' i b))
+restrict exp' _ _
+  = exp'
 
 ------------------------------------------------------
--- PART III
+-- PART III 50 mins
+
 
 -- Pre: Each variable index in the BExp appears exactly once
 --     in the Index list; there are no other elements
 -- The question suggests the following definition (in terms of buildBDD')
 -- but you are free to implement the function differently if you wish.
 buildBDD :: BExp -> [Index] -> BDD
-buildBDD 
-  = undefined
+buildBDD e
+  = buildBDD' e 2
 
 -- Potential helper function for buildBDD which you are free
 -- to define/modify/ignore/delete/embed as you see fit.
 buildBDD' :: BExp -> NodeId -> [Index] -> BDD
-buildBDD' 
-  = undefined
+buildBDD' (Prim True) id []
+  = (1, [])
+buildBDD' (Prim False) id []
+  = (0, [])
+buildBDD' e id (x : xs)
+  = case (e', e'') of
+      (Prim _, Prim _) 
+        -> (id, [(id, (x, id', id''))])
+      _
+        -> (id, (id, (x, 2 * id, 2 * id + 1)) : ns ++ ns')
+  where
+    e'        = restrict e x False
+    e''       = restrict e x True
+    (id', ns)   = buildBDD' e' (2 * id) xs
+    (id'', ns') = buildBDD' e'' (2 * id + 1) xs
 
 ------------------------------------------------------
 -- PART IV
@@ -68,8 +120,54 @@ buildBDD'
 -- Pre: Each variable index in the BExp appears exactly once
 --      in the Index list; there are no other elements
 buildROBDD :: BExp -> [Index] -> BDD
-buildROBDD 
-  = undefined
+buildROBDD e xs
+  = tillConst (shareSubtrees . eliminate) (buildBDD e xs)
+
+tillConst :: Eq a => (a -> a) -> a -> a
+tillConst f xs
+  | xs' == xs  = xs
+  | otherwise  = tillConst f xs'
+  where
+    xs' = f xs
+
+eliminate :: BDD -> BDD
+eliminate (root, ns)
+  = (root, map fixParent ns')
+  where
+    xys  = [ (x, l) | (x, (_, l, r)) <- ns, l == r ]
+    ns'  = filter (\(_, (_, l, r)) -> l /= r) ns
+
+    fixParent :: BDDNode -> BDDNode
+    fixParent n@(x, (i, l, r))
+      = (x, (i, l', r'))
+      where
+        l' = case (lookup l xys) of
+              Just y -> y
+              Nothing -> l
+        r' = case (lookup l xys) of
+              Just y -> y
+              Nothing -> r
+
+
+share :: [BDDNode] -> [BDDNode] -> [BDDNode]
+share [] ns'
+  = ns'
+share (a@(id, n@(i, l, r)) : ns) ns'
+  | null same = share ns ns'
+  | otherwise = share ns (map fixParent (delete a ns'))
+
+  where
+    same = [ id' | (id', n') <- ns, n' == n, id' /= id ]
+    
+    fixParent :: BDDNode -> BDDNode
+    fixParent n@(id', (i, l, r)) 
+      | l == id   = (id', (i, head same, r))
+      | r == id   = (id', (i, l, head same))
+      | otherwise = n
+
+shareSubtrees :: BDD -> BDD
+shareSubtrees (root, ns)
+  = (root, share ns ns)
 
 ------------------------------------------------------
 -- Examples for testing...
