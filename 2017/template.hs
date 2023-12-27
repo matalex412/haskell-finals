@@ -1,5 +1,8 @@
+{-# LANGUAGE ScopedTypeVariables #-}
+
 import Data.Maybe
 import Data.List
+import Data.Ord (comparing)
 
 type AttName = String
 
@@ -36,46 +39,70 @@ lookUp x table
               (lookup x table)
 
 --------------------------------------------------------------------
--- PART I
+-- PART I 50 mins
 --------------------------------------------------------------------
 
 allSame :: Eq a => [a] -> Bool
-allSame 
-  = undefined
+allSame xs
+  = length (nub xs) <= 1
 
 remove :: Eq a => a -> [(a, b)] -> [(a, b)]
-remove 
-  = undefined
+remove x' xys
+  = filter ((/= x') . fst) xys
 
 lookUpAtt :: AttName -> Header -> Row -> AttValue
+--Pre: attribute values unique to attribute?
 --Pre: The attribute name is present in the given header.
-lookUpAtt
-  = undefined
+lookUpAtt n h r 
+  = head (filter (`elem` vs) r)
+  where
+    vs = lookUp n h
 
 removeAtt :: AttName -> Header -> Row -> Row
-removeAtt
-  = undefined
+removeAtt n h r
+  = filter (`notElem` vs) r
+  where
+    vs = lookUp n h
 
-addToMapping :: Eq a => (a, b) -> [(a, [b])] -> [(a, [b])]
-addToMapping
-  = undefined
+addToMapping :: forall a b. Eq a => (a, b) -> [(a, [b])] -> [(a, [b])]
+addToMapping (x, y) xyss
+  | x `notElem` map fst xyss = (x, [y]) : xyss
+  | otherwise                = map addExisting xyss
+  where
+    addExisting :: (a, [b]) -> (a, [b])
+    addExisting p@(x', ys') 
+      | x == x'   = (x', y : ys')
+      | otherwise = p
 
 buildFrequencyTable :: Attribute -> DataSet -> [(AttValue, Int)]
 --Pre: Each row of the data set contains an instance of the attribute
-buildFrequencyTable
-  = undefined
+buildFrequencyTable (n, optns) (h, rs)
+  = map tally optns
+  where
+    vs = map (lookUpAtt n h) rs
+    tally :: AttValue -> (AttValue, Int)
+    tally v 
+      = (v, length (filter (==v) vs))
 
 --------------------------------------------------------------------
--- PART II
+-- PART II 15 mins
 --------------------------------------------------------------------
 
 nodes :: DecisionTree -> Int
-nodes 
-  = undefined
+nodes (Null)
+  = 0
+nodes (Leaf _)
+  = 1
+nodes (Node n ots)
+  = 1 + sum (map (nodes . snd) ots)
 
 evalTree :: DecisionTree -> Header -> Row -> AttValue
-evalTree 
-  = undefined
+evalTree Null _ _
+  = ""
+evalTree (Leaf v) _ _
+  = v
+evalTree (Node n ots) atts r
+  = evalTree (lookUp (lookUpAtt n atts r) ots) atts r
 
 --------------------------------------------------------------------
 -- PART III
@@ -93,28 +120,70 @@ nextAtt (header, _) (classifierName, _)
   = head (filter ((/= classifierName) . fst) header)
 
 partitionData :: DataSet -> Attribute -> Partition
-partitionData 
-  = undefined
+partitionData (h, rs) (n, optns)
+  = [ (v, (h', rs)) | (v, rs) <- vrss ]
+  where
+    vrss = foldr (\r -> addToMapping (lookUpAtt n h r, removeAtt n h r)) 
+                 [ (v, []) | v <- optns ] rs
+    h'   = remove n h
+
+  -- = map selectRows optns
+  -- where
+  --   h' = remove n h
+  --   selectRows :: AttValue -> (AttValue, DataSet)
+  --   selectRows v
+  --     = (v, (h', [ removeAtt n h r | r <- rs, lookUpAtt n h r == v]))
 
 buildTree :: DataSet -> Attribute -> AttSelector -> DecisionTree 
-buildTree 
-  = undefined
+buildTree (header, []) classifier f
+  = Null
+buildTree t@(header, rs) c@(cName, _) f
+  | allSame cs = Leaf (head cs)
+  | otherwise  = Node n [(v, buildTree t' c f) | (v, t') <- partitionData t att]
+  where
+    att@(n, optns) = f t c 
+    cs = map (lookUpAtt cName header) rs
 
 --------------------------------------------------------------------
 -- PART IV
 --------------------------------------------------------------------
 
 entropy :: DataSet -> Attribute -> Double
-entropy 
-  = undefined
+entropy (_, []) _
+  = 0.0
+entropy d@(_, table) a@(_, optns)
+  = sum (map term optns)
+  where
+    l = length table
+    freqs = buildFrequencyTable a d
+    
+    term :: AttValue -> Double
+    term v 
+      = negate (xlogx p)
+      where
+        p = fromIntegral (lookUp v freqs) / fromIntegral l  
 
 gain :: DataSet -> Attribute -> Attribute -> Double
-gain 
-  = undefined
+gain d@(_, table) p@(_, optns) c
+  = edc - sum (map term optns)
+  where
+    edc = entropy d c
+
+    partitions = partitionData d p
+    freqs = buildFrequencyTable p d
+    l = length table
+
+    term :: AttValue -> Double
+    term v 
+      = prob * entropy (lookUp v partitions) c
+      where
+        prob = fromIntegral (lookUp v freqs) / fromIntegral l
 
 bestGainAtt :: AttSelector
-bestGainAtt 
-  = undefined
+bestGainAtt d@(header, _) c@(cName, _)
+  = maximumBy (comparing (\att -> gain d att c)) atts
+  where
+    atts = remove cName header 
 
 --------------------------------------------------------------------
 
