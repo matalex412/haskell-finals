@@ -1,0 +1,10 @@
+- 2017 Lessons
+
+- name can suggest useful in-built functions e.g. allSame suggests all
+- zip lookup pattern
+- recursion better than mapping helpers
+- consider map/filter vs list comprehension readability
+- using previously defined functions is not always most intuitive solution
+- use longer names
+- higher order functions defined on one-input functions 
+can be used for multiple input functions by partial application

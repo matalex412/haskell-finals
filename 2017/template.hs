@@ -47,42 +47,52 @@ allSame xs
   = length (nub xs) <= 1
 
 remove :: Eq a => a -> [(a, b)] -> [(a, b)]
-remove x' xys
-  = filter ((/= x') . fst) xys
+remove x'
+  = filter ((/= x') . fst)
 
 lookUpAtt :: AttName -> Header -> Row -> AttValue
 --Pre: attribute values unique to attribute?
 --Pre: The attribute name is present in the given header.
-lookUpAtt n h r 
-  = head (filter (`elem` vs) r)
+lookUpAtt n h
+  = head . filter (`elem` vs)
   where
     vs = lookUp n h
+
+-- lookUp n . zip (map fst h)
 
 removeAtt :: AttName -> Header -> Row -> Row
-removeAtt n h r
-  = filter (`notElem` vs) r
+removeAtt n h
+  = filter (`notElem` vs)
   where
     vs = lookUp n h
 
-addToMapping :: forall a b. Eq a => (a, b) -> [(a, [b])] -> [(a, [b])]
-addToMapping (x, y) xyss
-  | x `notElem` map fst xyss = (x, [y]) : xyss
-  | otherwise                = map addExisting xyss
-  where
-    addExisting :: (a, [b]) -> (a, [b])
-    addExisting p@(x', ys') 
-      | x == x'   = (x', y : ys')
-      | otherwise = p
+-- map snd . remove n . zip (map fst h)
+
+-- addToMapping :: forall a b. Eq a => (a, b) -> [(a, [b])] -> [(a, [b])]
+-- addToMapping (x, y) xyss
+--   | x `notElem` map fst xyss = (x, [y]) : xyss
+--   | otherwise                = map addExisting xyss
+--   where
+--     addExisting :: (a, [b]) -> (a, [b])
+--     addExisting p@(x', ys') 
+--       | x == x'   = (x', y : ys')
+--       | otherwise = p
+
+
+addToMapping :: Eq a => (a, b) -> [(a, [b])] -> [(a, [b])]
+addToMapping (x, y) []
+  = [(x, [y])]
+addToMapping (x, y) (p@(x', ys) : xyss)
+  | x == x'   = (x, y : ys) : xyss
+  | otherwise = p : addToMapping (x, y) xyss
+
 
 buildFrequencyTable :: Attribute -> DataSet -> [(AttValue, Int)]
 --Pre: Each row of the data set contains an instance of the attribute
 buildFrequencyTable (n, optns) (h, rs)
-  = map tally optns
+  = [ (optn, length (filter (==optn) vs)) | optn <- optns]
   where
     vs = map (lookUpAtt n h) rs
-    tally :: AttValue -> (AttValue, Int)
-    tally v 
-      = (v, length (filter (==v) vs))
 
 --------------------------------------------------------------------
 -- PART II 15 mins
@@ -93,7 +103,7 @@ nodes (Null)
   = 0
 nodes (Leaf _)
   = 1
-nodes (Node n ots)
+nodes (Node _ ots)
   = 1 + sum (map (nodes . snd) ots)
 
 evalTree :: DecisionTree -> Header -> Row -> AttValue
@@ -141,7 +151,7 @@ buildTree t@(header, rs) c@(cName, _) f
   | allSame cs = Leaf (head cs)
   | otherwise  = Node n [(v, buildTree t' c f) | (v, t') <- partitionData t att]
   where
-    att@(n, optns) = f t c 
+    att@(n, _) = f t c 
     cs = map (lookUpAtt cName header) rs
 
 --------------------------------------------------------------------
@@ -181,9 +191,8 @@ gain d@(_, table) p@(_, optns) c
 
 bestGainAtt :: AttSelector
 bestGainAtt d@(header, _) c@(cName, _)
-  = maximumBy (comparing (\att -> gain d att c)) atts
-  where
-    atts = remove cName header 
+  = maximumBy (comparing (\att -> gain d att c)) (remove cName header )
+  -- = maximumBy (comparing (flip (gain d) c)) (remove cName header )
 
 --------------------------------------------------------------------
 
