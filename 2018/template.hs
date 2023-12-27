@@ -36,26 +36,58 @@ execFun (name, args, p) vs
 type State = [(Id, Int)]
 
 update :: (Id, Int) -> State -> State
-update 
-  = undefined
+update (v, x) []
+  = [(v, x)] 
+update (v, x) ((v', x') : vxs)
+  | v == v'   = (v, x) : vxs
+  | otherwise = (v', x') : update (v, x) vxs
+
 
 apply :: Op -> Int -> Int -> Int
-apply 
-  = undefined
+apply Add x y
+  = x + y
+apply Mul x y
+  = x * y
+apply Eq x y
+  | x == y    = 1
+  | otherwise = 0
+apply Gtr x y
+  | x > y     = 1
+  | otherwise = 0
+
 
 eval :: Exp -> State -> Int
 -- Pre: the variables in the expression will all be bound in the given state 
 -- Pre: expressions do not contain phi instructions
-eval 
-  = undefined
+eval (Const x) _
+  = x
+eval (Var v) s
+  = lookUp v s
+eval (Apply o e e') s
+  = apply o (eval e s) (eval e' s)
+
 
 execStatement :: Statement -> State -> State
-execStatement 
-  = undefined
+execStatement (Assign v e) s
+  = update (v, eval e s) s
+execStatement (If c t e) s
+  | p == 1    = execBlock t s
+  | otherwise = execBlock e s
+  where
+    p = eval c s
+execStatement statement@(DoWhile b e) s
+  | c == 1     = execStatement statement s'
+  | otherwise  = s'
+  where
+    s' = execBlock b s
+    c  = eval e s'
+
 
 execBlock :: Block -> State -> State
-execBlock 
-  = undefined
+execBlock [] s
+  = s
+execBlock (sment : sments) s
+  = execBlock sments (execStatement sment s)
 
 ------------------------------------------------------------------------
 -- Given function for testing propagateConstants...
@@ -68,28 +100,79 @@ applyPropagate (name, args, body)
 ------------------------------------------------------------------------
 -- PART II
 
+-- data Exp = Const Int | Var Id | Apply Op Exp Exp | Phi Exp Exp
+--          deriving (Eq, Show)
+
 foldConst :: Exp -> Exp
 -- Pre: the expression is in SSA form
-foldConst 
-  = undefined
+foldConst (Phi (Const x) (Const x')) | x == x'
+  = Const x
+foldConst (Apply o (Const x) (Const x'))
+  = Const (apply o x x')
+foldConst (Apply Add (Var v) (Const 0))
+  = Var v
+foldConst (Apply Add (Const 0) (Var v))
+  = Var v
+foldConst e
+  = e
+
 
 sub :: Id -> Int -> Exp -> Exp
 -- Pre: the expression is in SSA form
-sub 
-  = undefined
+sub v x e
+  = foldConst (sub' v x e)
+  where
+    sub' :: Id -> Int -> Exp -> Exp
+    sub' v x (Var v') | v' == v
+      = Const x
+    sub' v x (Apply o e e')
+      = Apply o (sub' v x e) (sub' v x e') 
+    sub' v x (Phi e e')
+      = Phi (sub' v x e) (sub' v x e')
+    sub' _ _ e
+      = e
+    
 
 -- Use (by uncommenting) any of the following, as you see fit...
--- type Worklist = [(Id, Int)]
--- scan :: Id -> Int -> Block -> (Worklist, Block)
+type Worklist = [(Id, Int)]
 -- scan :: (Exp -> Exp) -> Block -> (Exp -> Exp, Block)
- 
+
 propagateConstants :: Block -> Block
 -- Pre: the block is in SSA form
-propagateConstants 
-  = undefined
+propagateConstants b
+  = propagateConstants' [("$INVALID", 0)] b
+  where
+    propagateConstants' [] b
+      = b
+    propagateConstants' ((v, x) : vxs) b
+      = propagateConstants' (vxs ++ wl) b'
+      where
+        (wl, b') = scan v x b
+
+
+    scan :: Id -> Int -> Block -> (Worklist, Block)
+    scan _ _ []
+      = ([], [])
+    scan v x (sment : sments)
+      = case sment of
+          Assign "$return" e
+            -> (wl, Assign "$return" (sub v x e) : b)
+          Assign v' e  
+            -> case sub v x e of
+                 Const x'  -> ((v', x') : wl, b)
+                 e'        -> (wl, Assign v' e' : b)
+          If p q r     
+            -> let (wl', b') = scan v x q; (wl'', b'') = scan v x r 
+               in (wl ++ wl' ++ wl'', (If (sub v x p) b' b'') : b) 
+          DoWhile q e
+            -> let (wl', b') = scan v x q 
+               in (wl ++ wl', (DoWhile b' (sub v x e)) : b)
+      where
+        (wl, b) = scan v x sments
 
 ------------------------------------------------------------------------
 -- Given functions for testing unPhi...
+
 
 -- Applies unPhi to a given function...
 applyUnPhi :: Function -> Function
@@ -107,8 +190,18 @@ optimise (name, args, body)
 
 unPhi :: Block -> Block
 -- Pre: the block is in SSA form
-unPhi 
-  = undefined
+unPhi []
+  = []
+unPhi ((If p q r) : (Assign v (Phi e e')) : sments)
+  = unPhi ((If p (q ++ [Assign v e]) (r ++ [Assign v e'])) : sments)
+unPhi ((DoWhile ((Assign v (Phi e e')) : sments') c) : sments)
+  = unPhi ((Assign v e) : (DoWhile (sments' ++ [Assign v e']) c) : sments)
+unPhi ((If p q r) : sments)
+  = (If p (unPhi q) (unPhi r)) : sments
+unPhi ((DoWhile b e) : sments)
+  = (DoWhile (unPhi b) e) : sments
+unPhi (sment : sments)
+  = sment : unPhi sments
 
 ------------------------------------------------------------------------
 -- Part IV

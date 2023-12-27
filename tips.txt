@@ -7,4 +7,6 @@
 - using previously defined functions is not always most intuitive solution
 - use longer names
 - higher order functions defined on one-input functions 
-can be used for multiple input functions by partial application
+- can be used for multiple input functions by partial application
+- you don't have to completely understand at first, just follow instructions
+- its not always easier to break down function into two separate ones which could act concurrently
