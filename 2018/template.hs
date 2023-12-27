@@ -36,12 +36,13 @@ execFun (name, args, p) vs
 type State = [(Id, Int)]
 
 update :: (Id, Int) -> State -> State
-update (v, x) []
-  = [(v, x)] 
-update (v, x) ((v', x') : vxs)
-  | v == v'   = (v, x) : vxs
-  | otherwise = (v', x') : update (v, x) vxs
+update (id, v) []
+  = [(id, v)] 
+update (id, v) ((id', v') : idvs)
+  | id == id' = (id, v) : idvs
+  | otherwise = (id', v') : update (id, v) idvs
 
+-- (id, v) : filter ((id /=) . fst) s
 
 apply :: Op -> Int -> Int -> Int
 apply Add x y
@@ -61,33 +62,27 @@ eval :: Exp -> State -> Int
 -- Pre: expressions do not contain phi instructions
 eval (Const x) _
   = x
-eval (Var v) s
-  = lookUp v s
-eval (Apply o e e') s
-  = apply o (eval e s) (eval e' s)
+eval (Var id) s
+  = lookUp id s
+eval (Apply op e e') s
+  = apply op (eval e s) (eval e' s)
 
 
 execStatement :: Statement -> State -> State
-execStatement (Assign v e) s
-  = update (v, eval e s) s
-execStatement (If c t e) s
-  | p == 1    = execBlock t s
-  | otherwise = execBlock e s
-  where
-    p = eval c s
-execStatement statement@(DoWhile b e) s
-  | c == 1     = execStatement statement s'
-  | otherwise  = s'
+execStatement (Assign id e) s
+  = update (id, eval e s) s
+execStatement (If p q r) s
+  | eval p s == 1 = execBlock q s
+  | otherwise     = execBlock r s
+execStatement sment@(DoWhile b p) s
+  | eval p s' == 1 = execStatement sment s'
+  | otherwise      = s'
   where
     s' = execBlock b s
-    c  = eval e s'
-
 
 execBlock :: Block -> State -> State
-execBlock [] s
-  = s
-execBlock (sment : sments) s
-  = execBlock sments (execStatement sment s)
+execBlock
+  = flip (foldr execStatement)
 
 ------------------------------------------------------------------------
 -- Given function for testing propagateConstants...
@@ -100,35 +95,33 @@ applyPropagate (name, args, body)
 ------------------------------------------------------------------------
 -- PART II
 
--- data Exp = Const Int | Var Id | Apply Op Exp Exp | Phi Exp Exp
---          deriving (Eq, Show)
 
 foldConst :: Exp -> Exp
 -- Pre: the expression is in SSA form
 foldConst (Phi (Const x) (Const x')) | x == x'
   = Const x
-foldConst (Apply o (Const x) (Const x'))
-  = Const (apply o x x')
-foldConst (Apply Add (Var v) (Const 0))
-  = Var v
-foldConst (Apply Add (Const 0) (Var v))
-  = Var v
+foldConst (Apply op (Const x) (Const x'))
+  = Const (apply op x x')
+foldConst (Apply Add (Var id) (Const 0))
+  = Var id
+foldConst (Apply Add (Const 0) (Var id))
+  = Var id
 foldConst e
   = e
 
 
 sub :: Id -> Int -> Exp -> Exp
 -- Pre: the expression is in SSA form
-sub v x e
-  = foldConst (sub' v x e)
+sub id x e
+  = foldConst (sub' id x e)
   where
     sub' :: Id -> Int -> Exp -> Exp
-    sub' v x (Var v') | v' == v
+    sub' id x (Var id') | id' == id
       = Const x
-    sub' v x (Apply o e e')
-      = Apply o (sub' v x e) (sub' v x e') 
-    sub' v x (Phi e e')
-      = Phi (sub' v x e) (sub' v x e')
+    sub' id x (Apply o e e')
+      = Apply o (sub' id x e) (sub' id x e') 
+    sub' id x (Phi e e')
+      = Phi (sub' id x e) (sub' id x e')
     sub' _ _ e
       = e
     
@@ -139,36 +132,37 @@ type Worklist = [(Id, Int)]
 
 propagateConstants :: Block -> Block
 -- Pre: the block is in SSA form
-propagateConstants b
-  = propagateConstants' [("$INVALID", 0)] b
+propagateConstants
+  = propagateConstants' [("$INVALID", 0)]
   where
+    propagateConstants' :: Worklist -> Block -> Block
     propagateConstants' [] b
       = b
-    propagateConstants' ((v, x) : vxs) b
-      = propagateConstants' (vxs ++ wl) b'
+    propagateConstants' ((id, v) : idvs) b
+      = propagateConstants' (idvs ++ wl) b'
       where
-        (wl, b') = scan v x b
+        (wl, b') = scan id v b
 
 
     scan :: Id -> Int -> Block -> (Worklist, Block)
     scan _ _ []
       = ([], [])
-    scan v x (sment : sments)
+    scan id x (sment : sments)
       = case sment of
           Assign "$return" e
-            -> (wl, Assign "$return" (sub v x e) : b)
-          Assign v' e  
-            -> case sub v x e of
-                 Const x'  -> ((v', x') : wl, b)
-                 e'        -> (wl, Assign v' e' : b)
+            -> (wl, Assign "$return" (sub id x e) : b)
+          Assign id' e  
+            -> case sub id x e of
+                 Const x'  -> ((id', x') : wl, b)
+                 e'        -> (wl, Assign id' e' : b)
           If p q r     
-            -> let (wl', b') = scan v x q; (wl'', b'') = scan v x r 
-               in (wl ++ wl' ++ wl'', (If (sub v x p) b' b'') : b) 
+            -> let (wl', b') = scan id x q; (wl'', b'') = scan id x r 
+               in (wl ++ wl' ++ wl'', (If (sub id x p) b' b'') : b) 
           DoWhile q e
-            -> let (wl', b') = scan v x q 
-               in (wl ++ wl', (DoWhile b' (sub v x e)) : b)
+            -> let (wl', b') = scan id x q 
+               in (wl ++ wl', (DoWhile b' (sub id x e)) : b)
       where
-        (wl, b) = scan v x sments
+        (wl, b) = scan id x sments
 
 ------------------------------------------------------------------------
 -- Given functions for testing unPhi...
