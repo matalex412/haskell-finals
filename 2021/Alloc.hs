@@ -10,11 +10,14 @@ import Examples
 
 ------------------------------------------------------
 --
--- Part I -- 35 mins (incl reading)
+-- Part I
 --
 count :: Eq a => a -> [a] -> Int
 count x
   = length . filter (== x)
+
+
+-- unzip could be used
 
 degrees :: Eq a => Graph a -> [(a, Int)]
 degrees (ns, es)
@@ -27,18 +30,18 @@ neighbours n (ns, es)
   = nub ([ start | (start, end) <- es, end == n] ++
          [ end | (start, end) <- es, start == n])
 
-tupleContains :: Eq a => a -> (a, a) -> Bool
-tupleContains x (y, z)
-  = x == y || x == z
-
 removeNode :: Eq a => a -> Graph a -> Graph a
 removeNode n (ns, es)
-  = (delete n ns, filter (not . tupleContains n) es)
+  = (delete n ns, [ e | e@(start, end) <- es, start /= n, end /= n])
 
 ------------------------------------------------------
 --
--- Part II - 25 mins
+-- Part II
 --
+
+-- could have done ++ [0] to csLeft to ensure not empty then use head
+-- instead of guards
+
 colourGraph :: (Ord a, Show a) => Int -> Graph a -> Colouring a
 colourGraph _ ([], _)
   = []
@@ -54,7 +57,7 @@ colourGraph maxC g@(ns, es)
 
 ------------------------------------------------------
 --
--- Part III -- 45 mins
+-- Part III
 --
 buildIdMap :: Colouring Id -> IdMap
 buildIdMap idcs
@@ -82,7 +85,11 @@ renameExp (Apply op e e') idMap
   = Apply op (renameExp e idMap) (renameExp e' idMap)
 renameExp e _
   = e
-          
+
+
+-- could have performed a map and then filtered out self-assignments
+-- instead of recursion
+
 renameBlock :: Block -> IdMap -> Block
 -- Pre: A precondition is that every variable referenced in 
 -- the block is in the idMap. 
@@ -92,7 +99,7 @@ renameBlock b idMap
     renameBlock' :: Block -> Block
     renameBlock' []
       = []
-    renameBlock' ((Assign id e) : sments)
+    renameBlock' (Assign id e : sments)
       = case renameExp e idMap of
           Var id'' | id' == id''
             -> renameBlock' sments
@@ -100,10 +107,10 @@ renameBlock b idMap
             -> Assign id' e' : renameBlock' sments
       where
         id' = lookUp id idMap
-    renameBlock' ((If e b b') : sments)
+    renameBlock' (If e b b' : sments)
       = If (renameExp e idMap) (renameBlock' b) (renameBlock' b') 
       : renameBlock' sments
-    renameBlock' ((While e b) : sments)
+    renameBlock' (While e b : sments)
       = While (renameExp e idMap) (renameBlock' b)
       : renameBlock' sments
 
