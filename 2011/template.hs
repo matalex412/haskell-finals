@@ -1,4 +1,3 @@
--- 14:00
 import Data.Maybe
 
 data Expr = Number Int |
@@ -72,8 +71,7 @@ occurs _ _
   = False
 
 ------------------------------------------------------
--- PART II - 10:40
-
+-- PART II
 
 -- Pre: There are no user-defined functions (constructor Fun)
 -- Pre: All variables in the expression have a binding in the given 
@@ -103,7 +101,7 @@ inferType (App f arg) env
         -> TErr
 
 ------------------------------------------------------
--- PART III - 12:30
+-- PART III
 
 applySub :: Sub -> Type -> Type
 applySub sub (TFun t t')
@@ -161,9 +159,7 @@ combineSubs
 
 inferPolyType :: Expr -> Type
 inferPolyType e
-  = t
-  where
-    (_, t, _) = inferPolyType' e [] 1
+  = let (_, t, _) = inferPolyType' e [] 1 in t
 
 inferPolyType' :: Expr -> TEnv -> Int -> (Sub, Type, Int)
 inferPolyType' (Number _) _ n
@@ -176,23 +172,23 @@ inferPolyType' (Prim f) _ n
   = ([], lookUp f primTypes, n)
 inferPolyType' (Fun x e) env n
   = case te of
-      TErr -> (s, TErr, n')
-      otherwise -> (s, TFun (applySub s (TVar a)) te, n')
+      TErr
+        -> (s, TErr, n')
+      otherwise
+        -> (s, TFun (applySub s (TVar a)) te, n')
   where
     (s, te, n') = inferPolyType' e ((x, TVar a) : env) (n + 1)
-    a = 'a' : show n
+    a           = 'a' : show n
 inferPolyType' (App f e) env n
   = case unify tf (TFun te (TVar a)) of 
       Just us 
-        -> ( combineSubs [us, s', s]
-           , applySub us (TVar a)
-           , n'' + 1 )
+        -> (combineSubs [us, s', s], applySub us (TVar a), n'' + 1)
       Nothing 
         -> (s, TErr, n'')
   where
     (s, tf, n')   = inferPolyType' f env n
     (s', te, n'') = inferPolyType' e (updateTEnv env s) n'
-    a = 'a' : show n''
+    a             = 'a' : show n''
 
 
 
