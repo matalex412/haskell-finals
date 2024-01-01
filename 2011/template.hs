@@ -177,20 +177,23 @@ inferPolyType' (Prim f) _ n
 inferPolyType' (Fun x e) env n
   = case te of
       TErr -> (s, TErr, n')
-      otherwise -> (s, TFun (applySub s (TVar ('a' : show n))) te, n')
+      otherwise -> (s, TFun (applySub s (TVar a)) te, n')
   where
-    (s, te, n') = inferPolyType' e ((x, TVar ('a' : show n)) : env) (n + 1)
+    (s, te, n') = inferPolyType' e ((x, TVar a) : env) (n + 1)
+    a = 'a' : show n
 inferPolyType' (App f e) env n
-  = case unify tf (TFun te (TVar ('a' : show n''))) of 
+  = case unify tf (TFun te (TVar a)) of 
       Just us 
         -> ( combineSubs [us, s', s]
-           , applySub us (TVar ('a' : show n''))
+           , applySub us (TVar a)
            , n'' + 1 )
       Nothing 
         -> (s, TErr, n'')
   where
     (s, tf, n')   = inferPolyType' f env n
     (s', te, n'') = inferPolyType' e (updateTEnv env s) n'
+    a = 'a' : show n''
+
 
 
 -- You may optionally wish to use one of the following helper function declarations
