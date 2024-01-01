@@ -1,3 +1,4 @@
+-- 14:00
 import Data.Maybe
 
 data Expr = Number Int |
@@ -49,45 +50,95 @@ primTypes
 
 -- Pre: The search item is in the table
 lookUp :: Eq a => a -> [(a, b)] -> b
-lookUp 
-  = undefined
+lookUp x
+  = fromJust . lookup x
 
 tryToLookUp :: Eq a => a -> b -> [(a, b)] -> b
-tryToLookUp 
-  = undefined
+tryToLookUp x y
+  = fromMaybe y . lookup x
 
 -- Pre: The given value is in the table
 reverseLookUp :: Eq b => b -> [(a, b)] -> [a]
-reverseLookUp 
-  = undefined
+reverseLookUp y xys
+  = [ x | (x, y') <- xys, y' == y]
+
 
 occurs :: String -> Type -> Bool
-occurs 
-  = undefined
+occurs id (TVar id')
+  = id == id'
+occurs id (TFun t t')
+  = occurs id t || occurs id t'
+occurs _ _
+  = False
 
 ------------------------------------------------------
--- PART II
+-- PART II - 10:40
+
 
 -- Pre: There are no user-defined functions (constructor Fun)
 -- Pre: All variables in the expression have a binding in the given 
 --      type environment
 inferType :: Expr -> TEnv -> Type
-inferType
-  = undefined
+inferType (Number _) _
+  = TInt
+inferType (Boolean _) _
+  = TBool
+inferType (Id id) env
+  = lookUp id env
+inferType (Prim f) _
+  = lookUp f primTypes
+inferType (Cond p q r) env
+  | inferType p env == TBool &&  t == t'
+    = t
+  | otherwise
+    = TErr
+  where
+    t  = inferType q env
+    t' = inferType r env
+inferType (App f arg) env
+  = case inferType f env of
+      TFun t t' | inferType arg env == t
+        -> t'
+      otherwise
+        -> TErr
 
 ------------------------------------------------------
--- PART III
+-- PART III - 12:30
 
-applySub
-  = undefined
+applySub :: Sub -> Type -> Type
+applySub sub (TFun t t')
+  = TFun (applySub sub t) (applySub sub t')
+applySub sub (TVar v)
+  = tryToLookUp v (TVar v) sub
+applySub _ t
+  = t
 
 unify :: Type -> Type -> Maybe Sub
 unify t t'
   = unifyPairs [(t, t')] []
 
 unifyPairs :: [(Type, Type)] -> Sub -> Maybe Sub
-unifyPairs
-  = undefined
+unifyPairs [] s
+  = Just s
+unifyPairs ((t, t') : tts) s | t == t'
+  = unifyPairs tts s
+unifyPairs ((TVar v, t) : tts) s
+  = unifyPairsTVar (v, t) tts s
+unifyPairs ((t, TVar v) : tts) s
+  = unifyPairsTVar (v, t) tts s
+unifyPairs ((TFun t1 t2, TFun t1' t2') : tts) s
+  = unifyPairs ((t1, t1') : (t2, t2') : tts) s
+unifyPairs _ _
+  = Nothing
+
+unifyPairsTVar (v, t) tts s
+  | occurs v t 
+    = Nothing
+  | otherwise  
+    = unifyPairs [ (applySub' t,  applySub' t') | (t, t') <- tts ] 
+                 ((v, t) : s)
+  where
+    applySub' = applySub [(v, t)]
 
 ------------------------------------------------------
 -- PART IV
@@ -109,8 +160,38 @@ combineSubs
   = foldr1 combine
 
 inferPolyType :: Expr -> Type
-inferPolyType
-  = undefined
+inferPolyType e
+  = t
+  where
+    (_, t, _) = inferPolyType' e [] 1
+
+inferPolyType' :: Expr -> TEnv -> Int -> (Sub, Type, Int)
+inferPolyType' (Number _) _ n
+  = ([], TInt, n)
+inferPolyType' (Boolean _) _ n
+  = ([], TBool, n)
+inferPolyType' (Id id) env n
+  = ([], lookUp id env, n)
+inferPolyType' (Prim f) _ n
+  = ([], lookUp f primTypes, n)
+inferPolyType' (Fun x e) env n
+  = case te of
+      TErr -> (s, TErr, n')
+      otherwise -> (s, TFun (applySub s (TVar ('a' : show n))) te, n')
+  where
+    (s, te, n') = inferPolyType' e ((x, TVar ('a' : show n)) : env) (n + 1)
+inferPolyType' (App f e) env n
+  = case unify tf (TFun te (TVar ('a' : show n''))) of 
+      Just us 
+        -> ( combineSubs [us, s', s]
+           , applySub us (TVar ('a' : show n''))
+           , n'' + 1 )
+      Nothing 
+        -> (s, TErr, n'')
+  where
+    (s, tf, n')   = inferPolyType' f env n
+    (s', te, n'') = inferPolyType' e (updateTEnv env s) n'
+
 
 -- You may optionally wish to use one of the following helper function declarations
 -- as suggested in the specification. 
@@ -119,9 +200,6 @@ inferPolyType
 -- inferPolyType'
 --   = undefined
 
--- inferPolyType' :: Expr -> TEnv -> Int -> (Sub, Type, Int)
--- inferPolyType' 
---   = undefined
 
 ------------------------------------------------------
 -- Monomorphic type inference test cases from Table 1...
