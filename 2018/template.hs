@@ -82,7 +82,7 @@ execStatement sment@(DoWhile b p) s
 
 execBlock :: Block -> State -> State
 execBlock
-  = flip (foldr execStatement)
+  = flip (foldl (flip execStatement))
 
 ------------------------------------------------------------------------
 -- Given function for testing propagateConstants...
