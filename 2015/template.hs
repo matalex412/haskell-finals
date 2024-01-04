@@ -1,4 +1,5 @@
 import Data.Maybe
+import Data.List (delete)
 
 -- All programs are assumed to be well-formed in the following sense:
 --
@@ -57,7 +58,7 @@ type Binding = (Id, (Scope, Value))
 type State = [Binding]
 
 --------------------------------------------------------------------
--- Part I - 30 mins
+-- Part I
 
 getValue :: Id -> State -> Value
 -- Pre: The identifier has a binding in the state
@@ -83,14 +84,13 @@ assignArray (A a) (I i) (I v)
 updateVar :: (Id, Value) -> State -> State
 updateVar (id, v) s
   = case lookup id s of
-      Just (scp, _) 
-        -> (id, (scp, v)) : [ b | b@(id', (scp', _)) <- s
-                                , id' /= id || scp' /= scp ]
+      Just b@(scp, _) 
+        -> (id, (scp, v)) : delete (id, b) s
       Nothing
         -> (id, (Local, v)) : s
  
 ---------------------------------------------------------------------
--- Part II - 20 mins
+-- Part II
 
 applyOp :: Op -> Value -> Value -> Value
 -- Pre: The values have the appropriate types (I or A) for each primitive
@@ -107,10 +107,12 @@ applyOp Index (A ics) (I i)
       Just c  -> I c
       Nothing -> I 0
 
+-- I (fromMaybe 0 (lookup i ics))
+
 bindArgs :: [Id] -> [Value] -> State
 -- Pre: the lists have the same length
-bindArgs ids vs
-  = zipWith (\id v -> (id, (Local, v))) ids vs
+bindArgs
+  = zipWith (\id v -> (id, (Local, v)))
 
 evalArgs :: [Exp] -> [FunDef] -> State -> [Value]
 evalArgs es defs s
@@ -130,14 +132,13 @@ eval (Cond p q r) defs s
 eval (OpApp op e e') defs s
   = applyOp op (eval e defs s) (eval e' defs s)
 eval (FunApp f es) defs s
-  = eval e defs s'
+  = eval e defs (bindArgs as vs ++ s)
   where
     (as, e) = lookUp f defs
     vs      = evalArgs es defs s
-    s'      = bindArgs as vs ++ s
 
 ---------------------------------------------------------------------
--- Part III - 2hrs 10
+-- Part III
 
 executeStatement :: Statement -> [FunDef] -> [ProcDef] -> State -> State
 -- Pre: All statements are well formed 
@@ -182,20 +183,15 @@ executeBlock b fDefs pDefs s
 ---------------------------------------------------------------------
 -- Part IV
 
-
--- data Statement = Assign Id Exp |
---                  AssignA Id Exp Exp |
---                  If Exp Block Block |
---                  While Exp Block |
---                  Call Id Id [Exp] |
---                  Return Exp 
---                deriving (Eq, Show)
-
 translate :: FunDef -> Id -> [(Id, Id)] -> ProcDef
 translate (name, (as, e)) newName nameMap 
   = (newName, (as, b ++ [Return e']))
   where
     (b, e', ids') = translate' e nameMap ['$' : show n | n <- [1..]] 
+
+-- should check if block empty
+-- should translate predicate in if
+-- should translate es in FunApp
 
 translate' :: Exp -> [(Id, Id)] -> [Id] -> (Block, Exp, [Id])
 translate' e [] ids

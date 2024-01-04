@@ -186,14 +186,14 @@ unPhi :: Block -> Block
 -- Pre: the block is in SSA form
 unPhi []
   = []
-unPhi ((If p q r) : (Assign v (Phi e e')) : sments)
-  = unPhi ((If p (q ++ [Assign v e]) (r ++ [Assign v e'])) : sments)
-unPhi ((DoWhile ((Assign v (Phi e e')) : sments') c) : sments)
-  = unPhi ((Assign v e) : (DoWhile (sments' ++ [Assign v e']) c) : sments)
-unPhi ((If p q r) : sments)
-  = (If p (unPhi q) (unPhi r)) : sments
-unPhi ((DoWhile b e) : sments)
-  = (DoWhile (unPhi b) e) : sments
+unPhi (If p q r : Assign v (Phi e e') : sments)
+  = unPhi (If p (q ++ [Assign v e]) (r ++ [Assign v e']) : sments)
+unPhi (DoWhile ((Assign v (Phi e e')) : sments') c : sments)
+  = unPhi (Assign v e : DoWhile (sments' ++ [Assign v e']) c : sments)
+unPhi (If p q r : sments)
+  = If p (unPhi q) (unPhi r) : sments
+unPhi (DoWhile b e : sments)
+  = DoWhile (unPhi b) e : sments
 unPhi (sment : sments)
   = sment : unPhi sments
 
