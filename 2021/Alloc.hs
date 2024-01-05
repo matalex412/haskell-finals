@@ -164,18 +164,18 @@ buildCFG (_, _, b)
     buildCFG' :: Int -> Block -> CFG
     buildCFG' _ []
       = []
-    buildCFG' n ((Assign id e) : sments)
+    buildCFG' n (Assign id e : sments)
       | id == "return" = ((id, vars e), []) : buildCFG' (n + 1) sments
       | otherwise      = ((id, vars e), [n + 1]) : buildCFG' (n + 1) sments
-    buildCFG' n ((If e b b') : sments)
+    buildCFG' n (If e b b' : sments)
       = (("_", vars e), [n + 1, n + length cfg' + 1]) 
-      : cfg' ++ cfg'' ++ buildCFG' (n + 1) sments
+      : cfg' ++ cfg'' ++ buildCFG' (n + length cfg' + length cfg'' + 1) sments
       where
         cfg'  = buildCFG' (n + 1) b
         cfg'' = buildCFG' (n + length cfg' + 1) b'
-    buildCFG' n ((While e b) : sments)
+    buildCFG' n (While e b : sments)
       = (("_", vars e), [n + 1, n + 1 + length cfg']) 
-      : cfg' ++ buildCFG' (n + 1) sments
+      : cfg' ++ buildCFG' (n + length cfg' + 1) sments
       where
         cfg'' = buildCFG' (n + 1) b
         ((def, use), succs) = last cfg''
@@ -189,3 +189,18 @@ buildCFG (_, _, b)
       = nub (vars e ++ vars e')
     vars _
       = []
+
+-- fun f(a, n) {
+-- 0: b = 0;
+-- 1: while (n >= 1) {
+-- 2:   c = a + b;
+-- 3:   d = c + b;
+-- 4:   if (d >= 20) {
+-- 5:     b = c + d;
+-- 6:     d = d + 1;
+--      }
+-- 7:   a = c * d;
+-- 8:   n = n + -1;
+--    }
+-- 9: return = d;
+-- }
