@@ -53,7 +53,7 @@ skipSpace
 getAttribute :: String -> XML -> String
 getAttribute s (Element _ as _)
   = fromMaybe [] (lookup s as)
-getAttribute s _
+getAttribute _ _
   = ""
 
 getChildren :: String -> XML -> [XML]
@@ -66,7 +66,6 @@ getChildren n (Element _ _ es)
       = n == n'
     hasName _ _
       = False
-
 
 getChild :: String -> XML -> XML
 getChild n xml
@@ -127,11 +126,11 @@ parseAttributes s
   | x == '>'  = ([], xs) 
   | otherwise = ((name, val) : as, res)
   where
-    (x : xs)          = skipSpace s
-    (name, afterName) = parseName (x : xs)
-    valStarts         = (tail . skipSpace . tail . skipSpace) afterName
-    (val, afterVal)   = span (/= '"') valStarts
-    (as, res)         = parseAttributes (tail afterVal)
+    (x : xs)              = skipSpace s
+    (name, afterName)     = parseName (x : xs)
+    valStarts             = (tail . skipSpace . tail . skipSpace) afterName
+    (val, '"' : afterVal) = span (/= '"') valStarts
+    (as, res)             = parseAttributes afterVal
 
 parse :: String -> XML
 -- Pre: The XML string is well-formed
