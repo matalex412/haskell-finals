@@ -53,8 +53,8 @@ lookUp x
   = fromJust . lookup x
 
 tryToLookUp :: Eq a => a -> b -> [(a, b)] -> b
-tryToLookUp x y
-  = fromMaybe y . lookup x
+tryToLookUp x y t
+  = fromMaybe y (lookup x t)
 
 -- Pre: The given value is in the table
 reverseLookUp :: Eq b => b -> [(a, b)] -> [a]
@@ -86,19 +86,15 @@ inferType (Id id) env
 inferType (Prim f) _
   = lookUp f primTypes
 inferType (Cond p q r) env
-  | inferType p env == TBool &&  t == t'
-    = t
-  | otherwise
-    = TErr
+  | inferType p env == TBool,  t == t' = t
+  | otherwise                          = TErr
   where
     t  = inferType q env
     t' = inferType r env
 inferType (App f arg) env
   = case inferType f env of
-      TFun t t' | inferType arg env == t
-        -> t'
-      otherwise
-        -> TErr
+      TFun t t' | inferType arg env == t -> t'
+      otherwise                          -> TErr
 
 ------------------------------------------------------
 -- PART III
@@ -106,8 +102,8 @@ inferType (App f arg) env
 applySub :: Sub -> Type -> Type
 applySub sub (TFun t t')
   = TFun (applySub sub t) (applySub sub t')
-applySub sub (TVar v)
-  = tryToLookUp v (TVar v) sub
+applySub sub t@(TVar v)
+  = tryToLookUp v t sub
 applySub _ t
   = t
 
@@ -133,10 +129,10 @@ unifyPairsTVar (v, t) tts s
   | occurs v t 
     = Nothing
   | otherwise  
-    = unifyPairs [ (applySub' t,  applySub' t') | (t, t') <- tts ] 
-                 ((v, t) : s)
+    = unifyPairs tts' ((v, t) : s)
   where
     applySub' = applySub [(v, t)]
+    tts' = [ (applySub' t,  applySub' t') | (t, t') <- tts ]
 
 ------------------------------------------------------
 -- PART IV
@@ -167,15 +163,12 @@ inferPolyType' (Number _) _ n
 inferPolyType' (Boolean _) _ n
   = ([], TBool, n)
 inferPolyType' (Id id) env n
-  = ([], lookUp id env, n)
+  = ([], tryToLookUp id TErr env, n)
 inferPolyType' (Prim f) _ n
-  = ([], lookUp f primTypes, n)
+  = ([], tryToLookUp f TErr primTypes, n)
 inferPolyType' (Fun x e) env n
-  = case te of
-      TErr
-        -> (s, TErr, n')
-      otherwise
-        -> (s, TFun (applySub s (TVar a)) te, n')
+  | te == TErr = (s, TErr, n')
+  | otherwise  = (s, TFun (applySub s (TVar a)) te, n')
   where
     (s, te, n') = inferPolyType' e ((x, TVar a) : env) (n + 1)
     a           = 'a' : show n
