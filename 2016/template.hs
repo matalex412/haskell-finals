@@ -49,7 +49,6 @@ skipSpace :: String -> String
 skipSpace
   = dropWhile isSpace
 
-
 getAttribute :: String -> XML -> String
 getAttribute s (Element _ as _)
   = fromMaybe [] (lookup s as)
@@ -171,25 +170,66 @@ output :: String -> XML -> XML -> IO()
 output file xsl source
   = writeFile file (showXMLs (expandXSL xsl source))
 
+-- data XML = Null | Text String | Element Name Attributes [XML]
+--          deriving (Eq, Show)
+
+-- gets attribute with given name
+-- gets elements with given name
+-- gets first element with given name otherwise Text ""
+-- gets the value of an element (Text something)
+
 expandXSL :: XSL -> XML -> [XML]
 expandXSL xsl source 
   = expandXSL' root xsl
   where
     root = Element "/" [] [source] 
 
-
 expandXSL' :: Context -> XSL -> [XML]
-expandXSL' ctx (Element "for-each" [("select", dest)] es)
-  = concatMap (\e -> concatMap (expandXSL' e) es) (getAtPath dest ctx)
-expandXSL' ctx xsl@(Element "value-of" [("select", dest)] _)
-  | null es   = [ Text "" ]
-  | otherwise = [ getValue (head es) ]
+expandXSL' ctx xsl@(Element "for-each" as xsls)
+  = concatMap (\e -> concatMap (expandXSL' e) xsls) es
   where
-    es = getAtPath dest ctx
-expandXSL' ctx@(Element curr _ _) (Element n as es)
-  = [ Element n as (concatMap (expandXSL' ctx) es) ]
+    path = getAttribute "select" xsl
+    es = findElements path ctx
+expandXSL' ctx xsl@(Element "value-of" as _)
+  | null es       = [Text ""]
+  | (e : _) <- es = [getValue e]
+  where
+    path = getAttribute "select" xsl
+    es = findElements path ctx
+expandXSL' ctx (Element n as xsls) 
+  = [Element n as (concatMap (expandXSL' ctx) xsls)]
 expandXSL' _ xsl
-  = [ xsl ]
+  = [xsl]
+
+findElements :: String -> Context -> [XML]
+findElements p@(x : xs) ctx
+  | x == '.', null xs           = [ctx]
+  | x == '.', ('/' : xs') <- xs = findElements xs' ctx 
+  | x == '@'                    = [Text (getAttribute xs ctx)]
+  | null rest                   = children
+  | ('/' : xs') <- rest         = concatMap (findElements xs') children
+  where
+    (name, rest) = break (=='/') p
+    children     = getChildren name ctx
+
+
+
+
+
+
+
+-- expandXSL' :: Context -> XSL -> [XML]
+-- expandXSL' ctx (Element "for-each" [("select", dest)] es)
+--   = concatMap (\e -> concatMap (expandXSL' e) es) (getAtPath dest ctx)
+-- expandXSL' ctx xsl@(Element "value-of" [("select", dest)] _)
+--   | null es   = [ Text "" ]
+--   | otherwise = [ getValue (head es) ]
+--   where
+--     es = getAtPath dest ctx
+-- expandXSL' ctx@(Element curr _ _) (Element n as es)
+--   = [ Element n as (concatMap (expandXSL' ctx) es) ]
+-- expandXSL' _ xsl
+--   = [ xsl ]
 
 getAtPath :: String -> Context -> [XML]
 getAtPath p@(x : _) ctx 
